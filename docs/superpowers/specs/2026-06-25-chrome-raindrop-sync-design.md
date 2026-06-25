@@ -104,8 +104,10 @@ Manual and periodic both funnel through the same `sync.run()` path.
      Raindrop. Enforced by `isValidBookmarkUrl` (`src/url.js`) at both post entry
      points: `buildDesiredTree` (periodic) and `applyBookmarkCreated` (event-driven).
 2. **Read actual state (Raindrop).** Locate (or create) the `Chrome` root
-   collection; fetch its full nested collection subtree + all raindrops within;
-   normalize to the same tree shape as step 1.
+   collection; fetch its full nested collection subtree; fetch **all** raindrops
+   in one batch sweep (`GET /raindrops/0`) and bucket by `collectionId`;
+   normalize to the same tree shape as step 1. (Batch fetch keeps request count
+   independent of the number of collections, easing the 120 req/min limit.)
 3. **Diff (`reconcile.js`, pure).** Walk both trees by path → ordered op list:
    - `createCollection(path)` — parent-before-child.
    - `deleteCollection(id)` — child-before-parent.
@@ -150,7 +152,8 @@ Base: `https://api.raindrop.io/rest/v1`. Auth: `Authorization: Bearer <token>`.
 | Root + nested collections | `GET /collections`, `GET /collections/childrens` |
 | Create collection | `POST /collection` (`{ title, parent: { $id } }`) |
 | Delete collection | `DELETE /collection/{id}` |
-| List raindrops in a collection | `GET /raindrops/{collectionId}` (paged, `perpage=50`, `page`) |
+| List raindrops in a collection | `GET /raindrops/{collectionId}` (paged, `perpage=50`, `page`) — used by incremental single-op lookups |
+| List ALL raindrops (batch) | `GET /raindrops/0` (the "all" meta-collection, paged) — full sync fetches every raindrop in one sweep and buckets by `collectionId`, so request count is independent of collection count |
 | Create raindrop | `POST /raindrop` (`{ link, title, collection: { $id } }`) |
 | Move raindrop | `PUT /raindrop/{id}` (`{ collection: { $id } }`) |
 | Delete raindrop | `DELETE /raindrop/{id}` |
