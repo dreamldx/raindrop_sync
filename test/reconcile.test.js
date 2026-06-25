@@ -88,3 +88,23 @@ test('global ordering: creates, then moves, then deleteRaindrop, then deleteColl
   assert.ok(lastCreate < firstDeleteRaindrop, 'creates precede deleteRaindrop');
   assert.ok(firstDeleteRaindrop < firstDeleteCollection, 'deleteRaindrop precedes deleteCollection');
 });
+
+test('move and delete in same call → moveRaindrop precedes deleteRaindrop', () => {
+  const desired = root([
+    { path: ['Chrome', 'B'], title: 'B', folders: [], bookmarks: [{ url: 'https://move.com', title: 'M' }] },
+  ]);
+  const actual = root([
+    { path: ['Chrome', 'A'], title: 'A', collectionId: 2, folders: [],
+      bookmarks: [{ url: 'https://move.com', title: 'M', raindropId: 9 }] },
+  ], [{ url: 'https://gone.com', title: 'Gone', raindropId: 8 }], { collectionId: 1 });
+  const ops = reconcile(desired, actual);
+  const moveIdx = ops.findIndex((o) => o.type === 'moveRaindrop' && o.raindropId === 9);
+  const delIdx = ops.findIndex((o) => o.type === 'deleteRaindrop' && o.raindropId === 8);
+  assert.ok(moveIdx > -1 && delIdx > -1, 'both move and delete present');
+  assert.deepEqual(ops[moveIdx], { type: 'moveRaindrop', raindropId: 9, toCollectionPath: ['Chrome', 'B'] });
+  assert.deepEqual(ops[delIdx], { type: 'deleteRaindrop', raindropId: 8 });
+  assert.ok(moveIdx < delIdx, 'moveRaindrop precedes deleteRaindrop');
+  // Folder 'A' is emptied by the move and should be deleted after the deleteRaindrop.
+  const delCollIdx = ops.findIndex((o) => o.type === 'deleteCollection' && o.collectionId === 2);
+  assert.ok(delCollIdx > delIdx, 'deleteCollection for emptied folder comes after deleteRaindrop');
+});
