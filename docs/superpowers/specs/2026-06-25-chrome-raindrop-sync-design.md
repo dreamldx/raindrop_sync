@@ -98,6 +98,11 @@ Manual and periodic both funnel through the same `sync.run()` path.
    - Folder identity = **path** (e.g. `Chrome / Bookmarks Bar / Dev`).
    - Bookmark identity = **URL within its folder**. Same URL in two folders → two
      raindrops. Duplicate URL in the same folder collapses to one.
+   - **URL validation:** only parseable `http(s)` links are kept. Non-web bookmark
+     URLs (`javascript:`, `chrome://`, `chrome-extension://`, `about:`, `file://`,
+     `data:`, `ftp:`, malformed/empty) are **skipped** so they're never posted to
+     Raindrop. Enforced by `isValidBookmarkUrl` (`src/url.js`) at both post entry
+     points: `buildDesiredTree` (periodic) and `applyBookmarkCreated` (event-driven).
 2. **Read actual state (Raindrop).** Locate (or create) the `Chrome` root
    collection; fetch its full nested collection subtree + all raindrops within;
    normalize to the same tree shape as step 1.
