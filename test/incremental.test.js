@@ -57,6 +57,15 @@ test('applyBookmarkCreated creates a raindrop under the resolved collection', as
   assert.deepEqual(state.createdRaindrops, [{ link: 'https://github.com', title: 'GH', collectionId: 201 }]);
 });
 
+test('applyBookmarkCreated skips a non-web URL without posting', async () => {
+  const state = baseState();
+  const api = fakeApi(state);
+  const node = { id: '9', parentId: '5', title: 'JS', url: 'javascript:void(0)' };
+  assert.equal(await applyBookmarkCreated(api, 'Chrome', node, getNode), null);
+  assert.equal(state.createdRaindrops.length, 0);
+  assert.equal(state.createdCols.length, 0); // didn't even resolve/create the collection chain
+});
+
 test('applyBookmarkCreated is a no-op when the URL already exists (dedupe)', async () => {
   const state = baseState({
     children: [

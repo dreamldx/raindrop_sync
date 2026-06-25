@@ -1,4 +1,5 @@
 // src/incremental.js
+import { isValidBookmarkUrl } from './url.js';
 
 /**
  * Walk the Chrome parent chain from `parentId` up to the rootless root (id '0')
@@ -41,6 +42,7 @@ export async function resolveCollectionId(api, path, { createMissing = true } = 
 /** Single-op handler for chrome.bookmarks.onCreated. */
 export async function applyBookmarkCreated(api, rootTitle, node, getNode) {
   if (!node.url) return null; // folders are created lazily when a bookmark lands
+  if (!isValidBookmarkUrl(node.url)) return null; // skip non-web links (javascript:, chrome://, …)
   const path = await resolveFolderPath(getNode, node.parentId, rootTitle);
   const collectionId = await resolveCollectionId(api, path, { createMissing: true });
   const existing = await api.getRaindrops(collectionId);

@@ -30,3 +30,19 @@ test('buildDesiredTree maps Chrome containers to child folders under root', () =
   assert.deepEqual(dev.path, ['Chrome', 'Bookmarks Bar', 'Dev']);
   assert.deepEqual(dev.bookmarks, [{ url: 'https://github.com', title: 'GH' }]);
 });
+
+test('buildDesiredTree skips non-web bookmark URLs', () => {
+  const withJunk = [{
+    id: '0', title: '', children: [
+      { id: '1', title: 'Bookmarks Bar', children: [
+        { id: '4', title: 'Good', url: 'https://good.com' },
+        { id: '5', title: 'Bookmarklet', url: 'javascript:void(0)' },
+        { id: '6', title: 'Settings', url: 'chrome://settings' },
+        { id: '7', title: 'Local', url: 'file:///C:/x.txt' },
+      ] },
+    ],
+  }];
+  const tree = buildDesiredTree(withJunk, 'Chrome');
+  const bar = tree.folders.find((f) => f.title === 'Bookmarks Bar');
+  assert.deepEqual(bar.bookmarks, [{ url: 'https://good.com', title: 'Good' }]);
+});
