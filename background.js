@@ -77,11 +77,11 @@ chrome.bookmarks.onImportEnded.addListener(() => { importing = false; enqueue(ru
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'sync-now') {
-    enqueue(runAndRecord).then(sendResponse);
+    enqueue(runAndRecord).then(sendResponse, (err) => sendResponse({ ok: false, counts: null, message: err.message }));
     return true; // async response
   }
   if (msg.type === 'reschedule') {
-    scheduleAlarm().then(() => sendResponse({ ok: true }));
+    scheduleAlarm().then(() => sendResponse({ ok: true }), (err) => sendResponse({ ok: false, message: err.message }));
     return true;
   }
 });
