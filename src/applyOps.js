@@ -1,8 +1,17 @@
 import { pathKey } from './treeModel.js';
 
-export async function applyOps(api, ops, rootId, rootCollection) {
+export async function applyOps(api, ops, rootId, rootCollection, actual) {
   // Seed the path→id map with the configured root so any root name resolves.
   const idByPath = new Map([[pathKey([rootCollection]), rootId]]);
+  // Pre-seed with every pre-existing collection from the actual Raindrop tree,
+  // so create/move ops targeting folders not created this run still resolve.
+  if (actual) {
+    const seed = (folder) => {
+      idByPath.set(pathKey(folder.path), folder.collectionId);
+      for (const child of folder.folders) seed(child);
+    };
+    seed(actual);
+  }
   const counts = { added: 0, moved: 0, deleted: 0, collectionsCreated: 0, collectionsDeleted: 0 };
 
   for (const op of ops) {

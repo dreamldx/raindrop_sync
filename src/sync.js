@@ -18,7 +18,7 @@ export async function runSync({ token, rootCollection, getChromeTree, apiFactory
 
     onProgress('applying');
     const ops = reconcile(desired, actual);
-    const counts = await applyOps(api, ops, rootId, rootCollection);
+    const counts = await applyOps(api, ops, rootId, rootCollection, actual);
 
     onProgress('done');
     const message = `Added ${counts.added}, moved ${counts.moved}, deleted ${counts.deleted}.`;

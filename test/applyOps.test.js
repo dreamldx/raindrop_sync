@@ -43,3 +43,20 @@ test('applyOps works with a non-default root name', async () => {
   assert.deepEqual(api.log[0], ['createCollection', 'Bar', 7]); // resolved under root id 7
   assert.deepEqual(api.log[1], ['createRaindrop', 'https://a.com', 200]);
 });
+
+test('applyOps resolves create/move into a pre-existing actual folder (not undefined)', async () => {
+  const api = recordingApi();
+  // actual tree: root 'Chrome' (id 7) with pre-existing child folder 'Work' (id 55)
+  const actual = {
+    path: ['Chrome'], title: 'Chrome', collectionId: 7, bookmarks: [], folders: [
+      { path: ['Chrome', 'Work'], title: 'Work', collectionId: 55, bookmarks: [], folders: [] },
+    ],
+  };
+  const ops = [
+    { type: 'createRaindrop', url: 'https://a.com', title: 'A', collectionPath: ['Chrome', 'Work'] },
+    { type: 'moveRaindrop', raindropId: 9, toCollectionPath: ['Chrome', 'Work'] },
+  ];
+  await applyOps(api, ops, 7, 'Chrome', actual);
+  assert.deepEqual(api.log[0], ['createRaindrop', 'https://a.com', 55]); // NOT undefined
+  assert.deepEqual(api.log[1], ['moveRaindrop', 9, 55]);
+});
