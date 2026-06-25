@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Raindrop Bookmark Sync",
+  "version": "0.1.0",
+  "description": "Mirror your Chrome bookmarks into raindrop.io.",
+  "permissions": ["bookmarks", "alarms", "storage"],
+  "host_permissions": ["https://api.raindrop.io/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_title": "Raindrop Bookmark Sync" },
+  "options_page": "options.html"
+}
