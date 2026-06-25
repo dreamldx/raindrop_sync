@@ -39,6 +39,10 @@ async function runAndRecord() {
     onProgress: (stage) => { chrome.runtime.sendMessage({ type: 'progress', stage }).catch(() => {}); },
   });
   await storage.setLastRun({ ok: res.ok, message: res.message, counts: res.counts, at: Date.now() });
+  // Notify any open popup that the final result is now in storage. This survives a
+  // closed message channel (the popup is destroyed whenever it loses focus), so the
+  // popup can reflect completion without depending on the sync-now response.
+  chrome.runtime.sendMessage({ type: 'synced' }).catch(() => {});
   return res;
 }
 
