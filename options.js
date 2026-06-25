@@ -35,13 +35,17 @@ $('test').addEventListener('click', async () => {
 });
 
 $('save').addEventListener('click', async () => {
-  await storage.saveSettings({
-    token: $('token').value.trim(),
-    rootCollection: $('root').value.trim() || 'Chrome',
-    intervalMinutes: Number($('interval').value),
-  });
-  await chrome.runtime.sendMessage({ type: 'reschedule' });
-  setStatus($('status'), 'Saved.', 'ok');
+  try {
+    await storage.saveSettings({
+      token: $('token').value.trim(),
+      rootCollection: $('root').value.trim() || 'Chrome',
+      intervalMinutes: Number($('interval').value),
+    });
+    await chrome.runtime.sendMessage({ type: 'reschedule' });
+    setStatus($('status'), 'Saved.', 'ok');
+  } catch (err) {
+    setStatus($('status'), `Save failed: ${err.message}`, 'err');
+  }
 });
 
-load();
+load().catch((err) => setStatus($('status'), `Load failed: ${err.message}`, 'err'));
