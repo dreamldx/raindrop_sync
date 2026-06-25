@@ -22,15 +22,23 @@ export async function buildActualTree(api, rootTitle) {
     byParent.get(pid).push(c);
   }
 
-  async function buildFolder(id, title, path) {
+  // Fetch every raindrop in one paginated sweep, then bucket by collection id —
+  // far fewer requests than querying each collection separately.
+  const byCollection = new Map();
+  for (const r of await api.getAllRaindrops()) {
+    const cid = r.collectionId ?? r.collection?.$id;
+    if (!byCollection.has(cid)) byCollection.set(cid, []);
+    byCollection.get(cid).push(r);
+  }
+
+  function buildFolder(id, title, path) {
     const folder = emptyFolder(path, title);
     folder.collectionId = id;
-    const raindrops = await api.getRaindrops(id);
-    for (const r of raindrops) {
+    for (const r of byCollection.get(id) ?? []) {
       folder.bookmarks.push({ url: r.link, title: r.title, raindropId: r._id });
     }
     for (const child of byParent.get(id) ?? []) {
-      folder.folders.push(await buildFolder(child._id, child.title, [...path, child.title]));
+      folder.folders.push(buildFolder(child._id, child.title, [...path, child.title]));
     }
     return folder;
   }

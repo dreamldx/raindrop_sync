@@ -61,3 +61,13 @@ test('getRaindrops paginates until a short page', async () => {
   assert.equal(items.length, 51);
   assert.match(fetchImpl.calls[0].url, /\/raindrops\/123\?/);
 });
+
+test('getAllRaindrops fetches the "all" collection (0) in one sweep', async () => {
+  const page0 = json({ items: [{ _id: 1, link: 'l1', title: 't1', collectionId: 8 }] });
+  const fetchImpl = mockFetch([page0]);
+  const api = createRaindropApi({ token: 'T', fetchImpl, sleep: async () => {} });
+  const items = await api.getAllRaindrops();
+  assert.equal(items.length, 1);
+  assert.equal(items[0].collectionId, 8);
+  assert.match(fetchImpl.calls[0].url, /\/raindrops\/0\?/);
+});

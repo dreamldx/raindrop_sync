@@ -98,6 +98,7 @@ export function createRaindropApi({ token, fetchImpl = fetch, now = () => Date.n
     async deleteCollection(id) {
       await request('DELETE', `/collection/${id}`);
     },
+    // Page through GET /raindrops/{collectionId} (perpage max is 50).
     async getRaindrops(collectionId) {
       const out = [];
       let page = 0;
@@ -109,6 +110,12 @@ export function createRaindropApi({ token, fetchImpl = fetch, now = () => Date.n
         page += 1;
       }
       return out;
+    },
+    // Fetch ALL raindrops across the account in one paginated sweep (collection 0
+    // is Raindrop's "all" meta-collection). Each item carries `collectionId`, so a
+    // full sync can bucket locally instead of querying every collection separately.
+    async getAllRaindrops() {
+      return this.getRaindrops(0);
     },
     async createRaindrop({ link, title, collectionId }) {
       const data = await request('POST', '/raindrop', { link, title, collection: { $id: collectionId } });

@@ -13,7 +13,7 @@ function apiFactory() {
     async getUser() { return { fullName: 'Ada' }; },
     async getRootCollections() { return state.roots; },
     async getChildCollections() { return state.children; },
-    async getRaindrops(id) { return state.raindrops[id] ?? []; },
+    async getAllRaindrops() { return Object.entries(state.raindrops).flatMap(([cid, items]) => items.map((r) => ({ ...r, collectionId: Number(cid) }))); },
     async createCollection(t, p) { const item = { _id: 50 + state.created.length, title: t }; state.created.push(item); return item; },
     async createRaindrop(a) { state.created.push(a); return { _id: 999 }; },
     async moveRaindrop() {},
