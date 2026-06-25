@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Raindrop Sync</title>
+    <link rel="stylesheet" href="material.css" />
+    <style>
+      body { width: 280px; padding: 16px; }
+      #progress, #last { margin-top: 12px; }
+      .md-foot { margin-top: 12px; display: flex; justify-content: flex-end; }
+    </style>
+  </head>
+  <body>
+    <main class="md-card">
+      <h1 class="md-title">Raindrop Sync</h1>
+      <button id="sync" class="md-btn md-btn--block" type="button">Sync now</button>
+      <div id="progress" class="md-status"></div>
+      <div id="last" class="md-status"></div>
+      <div class="md-foot">
+        <button id="settings" class="md-btn md-btn--text" type="button">Settings</button>
+      </div>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

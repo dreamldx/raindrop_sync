@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Raindrop Sync Settings</title>
+    <link rel="stylesheet" href="material.css" />
+    <style>
+      body { padding: 24px; }
+      .page { max-width: 420px; margin: 0 auto; }
+    </style>
+  </head>
+  <body>
+    <main class="page md-card">
+      <h1 class="md-title">Raindrop Bookmark Sync</h1>
+      <p class="md-label">Mirror your Chrome bookmarks into raindrop.io.</p>
+
+      <div class="md-row">
+        <div class="md-field">
+          <input id="token" type="password" placeholder=" " />
+          <label for="token">Raindrop test token</label>
+        </div>
+        <button id="toggle" class="md-btn md-btn--text" type="button">Show</button>
+      </div>
+
+      <div class="md-actions">
+        <button id="test" class="md-btn md-btn--tonal" type="button">Test connection</button>
+        <span id="testResult" class="md-status"></span>
+      </div>
+
+      <div class="md-field">
+        <input id="root" type="text" placeholder=" " value="Chrome" />
+        <label for="root">Root collection</label>
+      </div>
+
+      <div class="md-select">
+        <label for="interval">Sync interval</label>
+        <select id="interval">
+          <option value="0">Manual only</option>
+          <option value="5">5 minutes</option>
+          <option value="10">10 minutes</option>
+          <option value="30" selected>30 minutes</option>
+          <option value="60">1 hour</option>
+          <option value="360">6 hours</option>
+          <option value="720">12 hours</option>
+        </select>
+      </div>
+
+      <div class="md-actions">
+        <button id="save" class="md-btn" type="button">Save</button>
+        <span id="status" class="md-status"></span>
+      </div>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
