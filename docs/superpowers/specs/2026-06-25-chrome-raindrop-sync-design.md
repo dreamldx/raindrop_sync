@@ -208,6 +208,9 @@ It reuses the same engine by flipping the roles:
 - While it runs, live forward events are **suppressed** (`suppressEvents`) so the
   writes don't bounce back as Chrome→Raindrop ops. The popup `confirm()`s first
   because it can delete Chrome bookmarks.
+- On success it **resets the periodic forward-sync alarm** (`scheduleAlarm()`), so
+  the next Chrome→Raindrop run is a fresh interval away rather than firing right
+  after the pull.
 
 ## Raindrop API
 

@@ -93,6 +93,9 @@ async function runReverseAndRecord() {
     await storage.setFolderMap(folderMap);
     const message = `Pulled from Raindrop: added ${counts.added}, deleted ${counts.deleted}.`;
     await storage.setLastRun({ ok: true, message, counts, at: Date.now() });
+    // Chrome now matches Raindrop — restart the periodic forward-sync countdown so
+    // it doesn't immediately fire right after a pull.
+    await scheduleAlarm();
   } catch (err) {
     await storage.setLastRun({ ok: false, message: `Pull failed: ${err.message}`, at: Date.now() });
   } finally {
