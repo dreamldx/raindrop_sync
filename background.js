@@ -6,6 +6,7 @@ import { applyBookmarkCreated, applyBookmarkRemoved } from './src/incremental.js
 import { findOrCreateRoot, buildActualTree } from './src/raindropTree.js';
 import { reverseSync } from './src/reverseSync.js';
 import { createChromeAdapter } from './src/chromeAdapter.js';
+import { isOverdueAlarm } from './src/alarmGate.js';
 
 const storage = createStorage();
 const ALARM = 'sync';
@@ -24,6 +25,10 @@ let importing = false;
 // Suppress live forward events while the reverse sync is writing to Chrome, so
 // its writes don't bounce back as Chrome→Raindrop ops.
 let suppressEvents = false;
+// True for a short window right after a real Chrome launch. Chrome replays its
+// bookmark hydration as an import session at startup, which would otherwise
+// trigger a full sync; this flag lets onImportEnded skip that startup sync.
+let browserJustStarted = false;
 
 const getChromeTree = () => chrome.bookmarks.getTree();
 
@@ -127,10 +132,27 @@ async function handleIncremental(kind, payload) {
 }
 
 chrome.runtime.onInstalled.addListener(scheduleAlarm);
-chrome.runtime.onStartup.addListener(scheduleAlarm);
+
+// At Chrome startup we only restart the schedule timer — we do NOT sync.
+// scheduleAlarm resets the countdown to a fresh full interval.
+chrome.runtime.onStartup.addListener(() => {
+  // Cover Chrome's startup bookmark-hydration import burst so it doesn't sync.
+  // Cleared after a margin past the observed hydration window (~16s); the worker
+  // also usually recycles before then, which resets the flag on its own.
+  browserJustStarted = true;
+  setTimeout(() => { browserJustStarted = false; }, 60_000);
+  return scheduleAlarm();
+});
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === ALARM) enqueue(runAndRecord);
+  if (alarm.name !== ALARM) return;
+  // chrome.alarms persist across restarts, so a periodic alarm that came due
+  // while Chrome was closed fires the instant Chrome reopens, with scheduledTime
+  // in the past. Drop that overdue startup firing instead of syncing — this is
+  // order-independent, unlike a flag set in onStartup which the overdue alarm can
+  // race (firing before onStartup, or after it resolves).
+  if (isOverdueAlarm(alarm.scheduledTime, Date.now())) return;
+  enqueue(runAndRecord);
 });
 
 // Event-driven incremental sync (suppressed during bulk import).
@@ -143,7 +165,14 @@ chrome.bookmarks.onRemoved.addListener((_id, removeInfo) => {
   enqueue(() => handleIncremental('removed', removeInfo));
 });
 chrome.bookmarks.onImportBegan.addListener(() => { importing = true; });
-chrome.bookmarks.onImportEnded.addListener(() => { importing = false; enqueue(runAndRecord); });
+chrome.bookmarks.onImportEnded.addListener(() => {
+  importing = false;
+  // Chrome replays its bookmark hydration as an import session at launch. Skip
+  // the sync in that case — the existing bookmarks already match Raindrop — so
+  // we only sync on genuine user imports.
+  if (browserJustStarted) return;
+  enqueue(runAndRecord);
+});
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'sync-now') {
