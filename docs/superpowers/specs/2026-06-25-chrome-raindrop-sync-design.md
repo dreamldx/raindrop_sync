@@ -142,6 +142,14 @@ limiter. During a **bulk import** (`onImportBegan`/`onImportEnded`) per-event
 handling is suspended; one full `sync.run()` runs when the import ends. A failed
 single op is harmless: the next periodic full sync re-reconciles and self-heals.
 
+**Duplicate folder names.** A single op resolves the target collection by title,
+which is ambiguous when the bookmark's folder chain contains same-named sibling
+folders — and a live op can't reproduce the id→_id ordering that the full sync
+relies on. So when `chainHasDuplicateNames` detects a duplicate-named folder in the
+chain, the handler returns `{ fallback: true }` and the service worker runs a full
+`sync.run()` instead (which pairs/creates collections in id order and self-heals).
+Unambiguous events still take the fast single-op path.
+
 ## Raindrop API
 
 Base: `https://api.raindrop.io/rest/v1`. Auth: `Authorization: Bearer <token>`.

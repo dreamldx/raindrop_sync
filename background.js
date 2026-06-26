@@ -21,6 +21,7 @@ let importing = false;
 
 const getChromeTree = () => chrome.bookmarks.getTree();
 const getNode = (id) => chrome.bookmarks.get(id);
+const getChildren = (id) => chrome.bookmarks.getChildren(id);
 
 async function scheduleAlarm() {
   const { intervalMinutes } = await storage.getSettings();
@@ -52,8 +53,14 @@ async function handleIncremental(kind, payload) {
   const api = createRaindropApi({ token });
   try {
     const res = kind === 'created'
-      ? await applyBookmarkCreated(api, rootCollection, payload, getNode)
-      : await applyBookmarkRemoved(api, rootCollection, payload, getNode);
+      ? await applyBookmarkCreated(api, rootCollection, payload, getNode, getChildren)
+      : await applyBookmarkRemoved(api, rootCollection, payload, getNode, getChildren);
+    if (res && res.fallback) {
+      // Duplicate folder names make a single-op ambiguous — let the full sync
+      // resolve it correctly (it pairs/creates collections in id order).
+      await runAndRecord();
+      return;
+    }
     if (res) await storage.setLastRun({ ok: true, message: `Live ${kind}`, counts: res, at: Date.now() });
   } catch (err) {
     await storage.setLastRun({ ok: false, message: `Live ${kind} failed: ${err.message}`, at: Date.now() });

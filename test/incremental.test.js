@@ -10,8 +10,19 @@ import {
 const NODES = {
   '1': { id: '1', parentId: '0', title: 'Bookmarks Bar' },
   '5': { id: '5', parentId: '1', title: 'Dev' },
+  '6': { id: '6', parentId: '1', title: 'Dev' }, // duplicate-named sibling of '5'
 };
 const getNode = async (id) => [NODES[id]];
+
+// getChildren mimics chrome.bookmarks.getChildren → array of child nodes.
+const CHILDREN = {
+  '0': [{ id: '1', parentId: '0', title: 'Bookmarks Bar' }],
+  '1': [
+    { id: '5', parentId: '1', title: 'Dev' },
+    { id: '6', parentId: '1', title: 'Dev' }, // two 'Dev' folders → ambiguous
+  ],
+};
+const getChildren = async (id) => CHILDREN[id] ?? [];
 
 function fakeApi(state) {
   return {
@@ -106,4 +117,34 @@ test('applyBookmarkRemoved deletes the collection when a folder is removed', asy
   const removeInfo = { parentId: '1', node: { title: 'Dev' } };
   assert.deepEqual(await applyBookmarkRemoved(api, 'Chrome', removeInfo, getNode), { collectionsDeleted: 1 });
   assert.deepEqual(state.deletedCols, [201]);
+});
+
+test('applyBookmarkCreated falls back to full sync when the folder name is duplicated', async () => {
+  const state = baseState();
+  const api = fakeApi(state);
+  // Parent '5' is one of two 'Dev' folders under '1' → ambiguous.
+  const node = { id: '9', parentId: '5', title: 'GH', url: 'https://github.com' };
+  const res = await applyBookmarkCreated(api, 'Chrome', node, getNode, getChildren);
+  assert.deepEqual(res, { fallback: true });
+  assert.equal(state.createdRaindrops.length, 0); // no single-op write into the wrong collection
+});
+
+test('applyBookmarkRemoved falls back to full sync when the folder name is duplicated', async () => {
+  const state = baseState();
+  const api = fakeApi(state);
+  const removeInfo = { parentId: '5', node: { title: 'GH', url: 'https://github.com' } };
+  const res = await applyBookmarkRemoved(api, 'Chrome', removeInfo, getNode, getChildren);
+  assert.deepEqual(res, { fallback: true });
+  assert.equal(state.deletedRaindrops.length, 0);
+});
+
+test('applyBookmarkCreated still does a single op when names are unambiguous', async () => {
+  // getChildren for '1' here has a single 'Dev', so no ambiguity.
+  const childrenOK = async (id) => (id === '1' ? [{ id: '5', parentId: '1', title: 'Dev' }] : (id === '0' ? [{ id: '1', parentId: '0', title: 'Bookmarks Bar' }] : []));
+  const state = baseState();
+  const api = fakeApi(state);
+  const node = { id: '9', parentId: '5', title: 'GH', url: 'https://github.com' };
+  const res = await applyBookmarkCreated(api, 'Chrome', node, getNode, childrenOK);
+  assert.deepEqual(res, { added: 1 });
+  assert.equal(state.createdRaindrops.length, 1);
 });
