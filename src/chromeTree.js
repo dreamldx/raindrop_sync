@@ -40,6 +40,7 @@ function addChildren(folder, children, path) {
 function convertFolder(chromeNode, pathName, parentPath) {
   const path = [...parentPath, pathName];
   const folder = emptyFolder(path, chromeNode.title);
+  folder.chromeId = chromeNode.id; // Chrome folder node id — used to persist the folder→collection map
   addChildren(folder, chromeNode.children, path);
   return folder;
 }

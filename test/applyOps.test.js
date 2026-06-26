@@ -26,7 +26,9 @@ test('applyOps resolves paths to ids and reports counts', async () => {
     { type: 'deleteCollection', path: ['Chrome', 'Old'], collectionId: 42 },
   ];
   const res = await applyOps(api, ops, 7, 'Chrome');
-  assert.deepEqual(res, { added: 1, moved: 1, deleted: 1, collectionsCreated: 1, collectionsDeleted: 1 });
+  assert.deepEqual(res.counts, { added: 1, moved: 1, deleted: 1, collectionsCreated: 1, collectionsDeleted: 1 });
+  // idByPath exposes path → collectionId for the folder→collection map.
+  assert.equal(res.idByPath.get('Chrome\0Bar'), 200);
   // Bar created under root id 7, then raindrop created under Bar's new id 200.
   assert.deepEqual(api.log[0], ['createCollection', 'Bar', 7]);
   assert.deepEqual(api.log[1], ['createRaindrop', 'https://a.com', 200]);

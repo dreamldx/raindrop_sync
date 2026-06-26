@@ -23,7 +23,7 @@ Raindrop **developer test token** (single user, no OAuth).
 | Deletions/moves | **Full mirror** — add, move, and delete to match Chrome |
 | Mirror scope | Confined to a single **root collection** (`Chrome`); the rest of the Raindrop account is never touched |
 | Source scope | Always sync the **whole** Chrome tree |
-| Sync algorithm | **Stateless reconciliation** — diff live Chrome tree vs live Raindrop subtree each run; no persisted mapping |
+| Sync algorithm | **Stateless reconciliation** for the full sync — diff live Chrome tree vs live Raindrop subtree each run. A `chromeFolderId → collectionId` **folder map** is persisted in `chrome.storage.local` (rebuilt every full sync) purely so live single-ops resolve the exact collection by folder id |
 
 ## Architecture
 
@@ -117,7 +117,20 @@ Manual and periodic both funnel through the same `sync.run()` path.
 4. **Apply (`applyOps.js`).** Safe order: create collections → create/move
    raindrops → delete raindrops → delete empty collections. (Deletes last so a
    move never transiently loses data.)
-5. **Report.** Tally counts, write `lastRun` to storage, message the popup.
+5. **Report.** Tally counts, write `lastRun` to storage, **rebuild the folder map**
+   (see below), and message the popup.
+
+### Folder map (`chromeFolderId → collectionId`)
+
+After applying ops, `applyOps` returns its `pathKey → collectionId` map; `sync.js`
+walks the desired tree (whose folder nodes carry `chromeId`) to build a
+`{ [chromeFolderId]: collectionId }` map and the service worker persists it in
+`chrome.storage.local`. This is the one piece of persisted state. The full sync
+remains stateless (it's derived fresh each run and is the source of truth); the
+map exists so **live single-ops can resolve the exact collection by Chrome folder
+id**, which makes duplicate-named folders unambiguous without title/order
+guessing. A stale map just causes a one-time fallback to full sync, which rebuilds
+it.
 
 ## Event-Driven Incremental Sync (`incremental.js`)
 
@@ -142,13 +155,13 @@ limiter. During a **bulk import** (`onImportBegan`/`onImportEnded`) per-event
 handling is suspended; one full `sync.run()` runs when the import ends. A failed
 single op is harmless: the next periodic full sync re-reconciles and self-heals.
 
-**Duplicate folder names.** A single op resolves the target collection by title,
-which is ambiguous when the bookmark's folder chain contains same-named sibling
-folders — and a live op can't reproduce the id→_id ordering that the full sync
-relies on. So when `chainHasDuplicateNames` detects a duplicate-named folder in the
-chain, the handler returns `{ fallback: true }` and the service worker runs a full
-`sync.run()` instead (which pairs/creates collections in id order and self-heals).
-Unambiguous events still take the fast single-op path.
+**Collection resolution via the folder map.** A live op resolves its target
+collection by `folderMap[node.parentId]` — the exact Chrome-folder-id →
+collection-id mapping rebuilt by each full sync. This makes duplicate-named
+folders unambiguous (the folder id, not the title, picks the collection). If the
+folder isn't in the map yet (a brand-new folder), or a *folder* was removed, the
+handler returns `{ fallback: true }` and the service worker runs a full
+`sync.run()` instead (which creates/deletes the collection and refreshes the map).
 
 ## Raindrop API
 
@@ -192,11 +205,13 @@ Base: `https://api.raindrop.io/rest/v1`. Auth: `Authorization: Bearer <token>`.
 ## Known Edge Cases
 
 - **Duplicate sibling folder names** under the same parent are supported: each
-  becomes its own Raindrop collection (keeping the real name). Identity uses a
-  disambiguated path component (`Work`, `Work (2)`, …) computed the same way on
-  both sides, so the trees still align. Pairing is by creation order — Chrome
-  siblings sorted by node `id`, Raindrop siblings by collection `_id` — which is
-  stable across display reordering. (`disambiguateNames` in `src/treeModel.js`.)
+  becomes its own Raindrop collection (keeping the real name). The full sync gives
+  them distinct identities via a disambiguated path component (`Work`, `Work (2)`,
+  …, `disambiguateNames` in `src/treeModel.js`) computed the same way on both
+  sides — Chrome siblings sorted by node `id`, Raindrop siblings by collection
+  `_id`. Live single-ops sidestep the ambiguity entirely by resolving the
+  collection through the persisted **folder map** (Chrome folder id → collection
+  id), so an add/remove always hits the right one of the same-named collections.
 - **Very deep nesting** — Raindrop nested collections are supported but deep trees
   may hit practical limits; document if encountered.
 - **Title-only edits are not synced.** Bookmark identity is URL-within-folder, so

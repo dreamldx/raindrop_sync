@@ -1,6 +1,7 @@
 const DEFAULTS = { token: '', rootCollection: 'Chrome', intervalMinutes: 30 };
 const SETTINGS_KEY = 'settings';
 const LAST_RUN_KEY = 'lastRun';
+const FOLDER_MAP_KEY = 'folderMap';
 
 export function createStorage(area = chrome.storage.local) {
   return {
@@ -18,6 +19,15 @@ export function createStorage(area = chrome.storage.local) {
     },
     async setLastRun(value) {
       await area.set({ [LAST_RUN_KEY]: value });
+    },
+    // Persistent { [chromeFolderId]: raindropCollectionId } map, rebuilt by each
+    // full sync and used by live single-ops to resolve the exact collection.
+    async getFolderMap() {
+      const got = await area.get(FOLDER_MAP_KEY);
+      return got[FOLDER_MAP_KEY] ?? {};
+    },
+    async setFolderMap(map) {
+      await area.set({ [FOLDER_MAP_KEY]: map });
     },
   };
 }

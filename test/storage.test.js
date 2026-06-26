@@ -30,3 +30,10 @@ test('last run round-trips', async () => {
   await s.setLastRun({ ok: true, message: 'done', at: 123 });
   assert.deepEqual(await s.getLastRun(), { ok: true, message: 'done', at: 123 });
 });
+
+test('folder map defaults to empty and round-trips', async () => {
+  const s = createStorage(memArea());
+  assert.deepEqual(await s.getFolderMap(), {});
+  await s.setFolderMap({ '10': 1001, '11': 1002 });
+  assert.deepEqual(await s.getFolderMap(), { '10': 1001, '11': 1002 });
+});

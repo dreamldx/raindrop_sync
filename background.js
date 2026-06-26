@@ -20,8 +20,6 @@ function enqueue(task) {
 let importing = false;
 
 const getChromeTree = () => chrome.bookmarks.getTree();
-const getNode = (id) => chrome.bookmarks.get(id);
-const getChildren = (id) => chrome.bookmarks.getChildren(id);
 
 async function scheduleAlarm() {
   const { intervalMinutes } = await storage.getSettings();
@@ -40,6 +38,8 @@ async function runAndRecord() {
     onProgress: (stage) => { chrome.runtime.sendMessage({ type: 'progress', stage }).catch(() => {}); },
   });
   await storage.setLastRun({ ok: res.ok, message: res.message, counts: res.counts, at: Date.now() });
+  // Persist the rebuilt chromeFolderId → collectionId map for the live single-ops.
+  if (res.folderMap) await storage.setFolderMap(res.folderMap);
   // Notify any open popup that the final result is now in storage. This survives a
   // closed message channel (the popup is destroyed whenever it loses focus), so the
   // popup can reflect completion without depending on the sync-now response.
@@ -52,12 +52,13 @@ async function handleIncremental(kind, payload) {
   if (!token) return; // periodic full sync will catch up once a token is set
   const api = createRaindropApi({ token });
   try {
+    const folderMap = await storage.getFolderMap();
     const res = kind === 'created'
-      ? await applyBookmarkCreated(api, rootCollection, payload, getNode, getChildren)
-      : await applyBookmarkRemoved(api, rootCollection, payload, getNode, getChildren);
+      ? await applyBookmarkCreated(api, payload, folderMap)
+      : await applyBookmarkRemoved(api, payload, folderMap);
     if (res && res.fallback) {
-      // Duplicate folder names make a single-op ambiguous — let the full sync
-      // resolve it correctly (it pairs/creates collections in id order).
+      // Folder isn't mapped yet (or a folder was removed) — run a full sync,
+      // which creates/deletes the collection and refreshes the folder map.
       await runAndRecord();
       return;
     }

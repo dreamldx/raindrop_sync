@@ -1,150 +1,93 @@
 // test/incremental.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  resolveFolderPath, resolveCollectionId,
-  applyBookmarkCreated, applyBookmarkRemoved,
-} from '../src/incremental.js';
-
-// Chrome nodes keyed by id; getNode mimics chrome.bookmarks.get → array.
-const NODES = {
-  '1': { id: '1', parentId: '0', title: 'Bookmarks Bar' },
-  '5': { id: '5', parentId: '1', title: 'Dev' },
-  '6': { id: '6', parentId: '1', title: 'Dev' }, // duplicate-named sibling of '5'
-};
-const getNode = async (id) => [NODES[id]];
-
-// getChildren mimics chrome.bookmarks.getChildren → array of child nodes.
-const CHILDREN = {
-  '0': [{ id: '1', parentId: '0', title: 'Bookmarks Bar' }],
-  '1': [
-    { id: '5', parentId: '1', title: 'Dev' },
-    { id: '6', parentId: '1', title: 'Dev' }, // two 'Dev' folders → ambiguous
-  ],
-};
-const getChildren = async (id) => CHILDREN[id] ?? [];
+import { applyBookmarkCreated, applyBookmarkRemoved } from '../src/incremental.js';
 
 function fakeApi(state) {
   return {
-    async getRootCollections() { return state.roots; },
-    async getChildCollections() { return state.children; },
     async getRaindrops(id) { return state.raindrops[id] ?? []; },
-    async createCollection(title, parentId) {
-      const item = { _id: state.nextId++, title, parent: parentId ? { $id: parentId } : undefined };
-      state.children.push(item);
-      state.createdCols.push(item);
-      return item;
-    },
     async createRaindrop(a) { state.createdRaindrops.push(a); return { _id: state.nextId++ }; },
     async deleteRaindrop(id) { state.deletedRaindrops.push(id); },
-    async deleteCollection(id) { state.deletedCols.push(id); },
   };
 }
 const baseState = (over = {}) => ({
-  roots: [{ _id: 100, title: 'Chrome' }],
-  children: [], raindrops: {}, nextId: 200,
-  createdCols: [], createdRaindrops: [], deletedRaindrops: [], deletedCols: [],
+  raindrops: {}, nextId: 200,
+  createdRaindrops: [], deletedRaindrops: [],
   ...over,
 });
 
-test('resolveFolderPath walks the chrome parent chain', async () => {
-  assert.deepEqual(await resolveFolderPath(getNode, '5', 'Chrome'), ['Chrome', 'Bookmarks Bar', 'Dev']);
-});
+// folderMap: chromeFolderId → raindropCollectionId. Two same-named Chrome folders
+// '10' and '11' map to distinct collections 1001 and 1002.
+const folderMap = { '5': 201, '10': 1001, '11': 1002 };
 
-test('resolveCollectionId creates the missing chain and returns the leaf id', async () => {
-  const state = baseState();
-  const api = fakeApi(state);
-  const id = await resolveCollectionId(api, ['Chrome', 'Bookmarks Bar', 'Dev'], { createMissing: true });
-  assert.equal(id, 201); // 200=Bookmarks Bar, 201=Dev
-  assert.deepEqual(state.createdCols.map((c) => [c.title, c.parent?.$id]), [['Bookmarks Bar', 100], ['Dev', 200]]);
-});
-
-test('applyBookmarkCreated creates a raindrop under the resolved collection', async () => {
+test('applyBookmarkCreated creates a raindrop in the mapped collection', async () => {
   const state = baseState();
   const api = fakeApi(state);
   const node = { id: '9', parentId: '5', title: 'GH', url: 'https://github.com' };
-  const res = await applyBookmarkCreated(api, 'Chrome', node, getNode);
-  assert.deepEqual(res, { added: 1 });
+  assert.deepEqual(await applyBookmarkCreated(api, node, folderMap), { added: 1 });
   assert.deepEqual(state.createdRaindrops, [{ link: 'https://github.com', title: 'GH', collectionId: 201 }]);
 });
 
-test('applyBookmarkCreated skips a non-web URL without posting', async () => {
+test('applyBookmarkCreated routes duplicate-named folders to distinct collections by id', async () => {
+  const state = baseState();
+  const api = fakeApi(state);
+  await applyBookmarkCreated(api, { id: 'a', parentId: '10', title: 'A', url: 'https://a.com' }, folderMap);
+  await applyBookmarkCreated(api, { id: 'b', parentId: '11', title: 'B', url: 'https://b.com' }, folderMap);
+  assert.deepEqual(state.createdRaindrops, [
+    { link: 'https://a.com', title: 'A', collectionId: 1001 },
+    { link: 'https://b.com', title: 'B', collectionId: 1002 },
+  ]);
+});
+
+test('applyBookmarkCreated dedupes when the URL already exists', async () => {
+  const state = baseState({ raindrops: { 201: [{ _id: 7, link: 'https://github.com' }] } });
+  const api = fakeApi(state);
+  const node = { id: '9', parentId: '5', title: 'GH', url: 'https://github.com' };
+  assert.equal(await applyBookmarkCreated(api, node, folderMap), null);
+  assert.equal(state.createdRaindrops.length, 0);
+});
+
+test('applyBookmarkCreated skips non-web URLs', async () => {
   const state = baseState();
   const api = fakeApi(state);
   const node = { id: '9', parentId: '5', title: 'JS', url: 'javascript:void(0)' };
-  assert.equal(await applyBookmarkCreated(api, 'Chrome', node, getNode), null);
-  assert.equal(state.createdRaindrops.length, 0);
-  assert.equal(state.createdCols.length, 0); // didn't even resolve/create the collection chain
-});
-
-test('applyBookmarkCreated is a no-op when the URL already exists (dedupe)', async () => {
-  const state = baseState({
-    children: [
-      { _id: 200, title: 'Bookmarks Bar', parent: { $id: 100 } },
-      { _id: 201, title: 'Dev', parent: { $id: 200 } },
-    ],
-    raindrops: { 201: [{ _id: 7, link: 'https://github.com', title: 'GH' }] },
-  });
-  const api = fakeApi(state);
-  const node = { id: '9', parentId: '5', title: 'GH', url: 'https://github.com' };
-  assert.equal(await applyBookmarkCreated(api, 'Chrome', node, getNode), null);
+  assert.equal(await applyBookmarkCreated(api, node, folderMap), null);
   assert.equal(state.createdRaindrops.length, 0);
 });
 
-test('applyBookmarkRemoved deletes the matching raindrop', async () => {
-  const state = baseState({
-    children: [
-      { _id: 200, title: 'Bookmarks Bar', parent: { $id: 100 } },
-      { _id: 201, title: 'Dev', parent: { $id: 200 } },
-    ],
-    raindrops: { 201: [{ _id: 7, link: 'https://github.com', title: 'GH' }] },
-  });
-  const api = fakeApi(state);
-  const removeInfo = { parentId: '5', node: { title: 'GH', url: 'https://github.com' } };
-  assert.deepEqual(await applyBookmarkRemoved(api, 'Chrome', removeInfo, getNode), { deleted: 1 });
-  assert.deepEqual(state.deletedRaindrops, [7]);
-});
-
-test('applyBookmarkRemoved deletes the collection when a folder is removed', async () => {
-  const state = baseState({
-    children: [
-      { _id: 200, title: 'Bookmarks Bar', parent: { $id: 100 } },
-      { _id: 201, title: 'Dev', parent: { $id: 200 } },
-    ],
-  });
-  const api = fakeApi(state);
-  // Folder 'Dev' removed; its parent is Bookmarks Bar ('1'). node has no url.
-  const removeInfo = { parentId: '1', node: { title: 'Dev' } };
-  assert.deepEqual(await applyBookmarkRemoved(api, 'Chrome', removeInfo, getNode), { collectionsDeleted: 1 });
-  assert.deepEqual(state.deletedCols, [201]);
-});
-
-test('applyBookmarkCreated falls back to full sync when the folder name is duplicated', async () => {
+test('applyBookmarkCreated falls back to full sync for an unmapped folder', async () => {
   const state = baseState();
   const api = fakeApi(state);
-  // Parent '5' is one of two 'Dev' folders under '1' → ambiguous.
-  const node = { id: '9', parentId: '5', title: 'GH', url: 'https://github.com' };
-  const res = await applyBookmarkCreated(api, 'Chrome', node, getNode, getChildren);
-  assert.deepEqual(res, { fallback: true });
-  assert.equal(state.createdRaindrops.length, 0); // no single-op write into the wrong collection
+  const node = { id: '9', parentId: '999', title: 'New', url: 'https://new.com' };
+  assert.deepEqual(await applyBookmarkCreated(api, node, folderMap), { fallback: true });
+  assert.equal(state.createdRaindrops.length, 0);
 });
 
-test('applyBookmarkRemoved falls back to full sync when the folder name is duplicated', async () => {
-  const state = baseState();
+test('applyBookmarkRemoved deletes the matching raindrop from the mapped collection', async () => {
+  const state = baseState({ raindrops: { 1002: [{ _id: 88, link: 'https://b.com' }] } });
   const api = fakeApi(state);
-  const removeInfo = { parentId: '5', node: { title: 'GH', url: 'https://github.com' } };
-  const res = await applyBookmarkRemoved(api, 'Chrome', removeInfo, getNode, getChildren);
-  assert.deepEqual(res, { fallback: true });
-  assert.equal(state.deletedRaindrops.length, 0);
+  const removeInfo = { parentId: '11', node: { title: 'B', url: 'https://b.com' } };
+  assert.deepEqual(await applyBookmarkRemoved(api, removeInfo, folderMap), { deleted: 1 });
+  assert.deepEqual(state.deletedRaindrops, [88]);
 });
 
-test('applyBookmarkCreated still does a single op when names are unambiguous', async () => {
-  // getChildren for '1' here has a single 'Dev', so no ambiguity.
-  const childrenOK = async (id) => (id === '1' ? [{ id: '5', parentId: '1', title: 'Dev' }] : (id === '0' ? [{ id: '1', parentId: '0', title: 'Bookmarks Bar' }] : []));
+test('applyBookmarkRemoved returns null when the raindrop is absent', async () => {
+  const state = baseState({ raindrops: { 1002: [] } });
+  const api = fakeApi(state);
+  const removeInfo = { parentId: '11', node: { title: 'B', url: 'https://b.com' } };
+  assert.equal(await applyBookmarkRemoved(api, removeInfo, folderMap), null);
+});
+
+test('applyBookmarkRemoved falls back for an unmapped folder', async () => {
   const state = baseState();
   const api = fakeApi(state);
-  const node = { id: '9', parentId: '5', title: 'GH', url: 'https://github.com' };
-  const res = await applyBookmarkCreated(api, 'Chrome', node, getNode, childrenOK);
-  assert.deepEqual(res, { added: 1 });
-  assert.equal(state.createdRaindrops.length, 1);
+  const removeInfo = { parentId: '999', node: { title: 'X', url: 'https://x.com' } };
+  assert.deepEqual(await applyBookmarkRemoved(api, removeInfo, folderMap), { fallback: true });
+});
+
+test('applyBookmarkRemoved falls back when a folder is removed', async () => {
+  const state = baseState();
+  const api = fakeApi(state);
+  const removeInfo = { parentId: '1', node: { title: 'Dev' } }; // no url → folder
+  assert.deepEqual(await applyBookmarkRemoved(api, removeInfo, folderMap), { fallback: true });
 });

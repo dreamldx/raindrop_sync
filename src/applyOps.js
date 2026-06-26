@@ -36,5 +36,7 @@ export async function applyOps(api, ops, rootId, rootCollection, actual) {
       counts.collectionsDeleted += 1;
     }
   }
-  return counts;
+  // idByPath now holds pathKey(path) → collectionId for every folder (existing +
+  // created), so the caller can build the chromeFolderId → collectionId map.
+  return { counts, idByPath };
 }

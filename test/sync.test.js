@@ -96,6 +96,11 @@ test('two same-named Chrome folders sync to two distinct collections and converg
   assert.deepEqual(linksFor(works[0]._id), ['https://a.com']); // lower Chrome id → lower _id
   assert.deepEqual(linksFor(works[1]._id), ['https://b.com']);
 
+  // The folder map pins each Chrome folder id to its exact collection — this is
+  // what makes live add/remove precise for duplicate-named folders.
+  assert.equal(first.folderMap['10'], works[0]._id);
+  assert.equal(first.folderMap['11'], works[1]._id);
+
   // Second run must be a pure no-op — proves the disambiguation is stable/idempotent.
   const second = await runSync(opts);
   assert.deepEqual(second.counts, { added: 0, moved: 0, deleted: 0, collectionsCreated: 0, collectionsDeleted: 0 });
