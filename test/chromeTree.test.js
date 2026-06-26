@@ -46,3 +46,27 @@ test('buildDesiredTree skips non-web bookmark URLs', () => {
   const bar = tree.folders.find((f) => f.title === 'Bookmarks Bar');
   assert.deepEqual(bar.bookmarks, [{ url: 'https://good.com', title: 'Good' }]);
 });
+
+test('same-named sibling folders get distinct paths, sorted by id, real titles kept', () => {
+  const dup = [{
+    id: '0', title: '', children: [
+      { id: '1', title: 'Bookmarks Bar', children: [
+        // Listed b.com first, but it has the higher id (created later).
+        { id: '11', title: 'Work', children: [{ id: '21', title: 'B', url: 'https://b.com' }] },
+        { id: '10', title: 'Work', children: [{ id: '20', title: 'A', url: 'https://a.com' }] },
+      ] },
+    ],
+  }];
+  const tree = buildDesiredTree(dup, 'Chrome');
+  const bar = tree.folders.find((f) => f.title === 'Bookmarks Bar');
+  // Sorted by id: the lower-id 'Work' (a.com) takes the bare path; both keep title 'Work'.
+  const works = bar.folders.filter((f) => f.title === 'Work');
+  assert.equal(works.length, 2);
+  const first = works.find((f) => f.path.join('|') === 'Chrome|Bookmarks Bar|Work');
+  const second = works.find((f) => f.path.join('|') === 'Chrome|Bookmarks Bar|Work (2)');
+  assert.ok(first && second, 'paths are Work and Work (2)');
+  assert.equal(first.title, 'Work');
+  assert.equal(second.title, 'Work');
+  assert.deepEqual(first.bookmarks, [{ url: 'https://a.com', title: 'A' }]);
+  assert.deepEqual(second.bookmarks, [{ url: 'https://b.com', title: 'B' }]);
+});

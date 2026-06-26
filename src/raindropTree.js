@@ -1,5 +1,5 @@
 // src/raindropTree.js
-import { emptyFolder } from './treeModel.js';
+import { emptyFolder, disambiguateNames } from './treeModel.js';
 
 export async function findOrCreateRoot(api, rootTitle) {
   const roots = await api.getRootCollections();
@@ -37,9 +37,13 @@ export async function buildActualTree(api, rootTitle) {
     for (const r of byCollection.get(id) ?? []) {
       folder.bookmarks.push({ url: r.link, title: r.title, raindropId: r._id });
     }
-    for (const child of byParent.get(id) ?? []) {
-      folder.folders.push(buildFolder(child._id, child.title, [...path, child.title]));
-    }
+    // Order siblings by collection _id so same-named collections map to Chrome
+    // folders by creation order; disambiguate the PATH only, keeping real titles.
+    const siblings = (byParent.get(id) ?? []).slice().sort((a, b) => a._id - b._id);
+    const pathNames = disambiguateNames(siblings.map((c) => c.title));
+    siblings.forEach((child, i) => {
+      folder.folders.push(buildFolder(child._id, child.title, [...path, pathNames[i]]));
+    });
     return folder;
   }
 

@@ -183,8 +183,12 @@ Base: `https://api.raindrop.io/rest/v1`. Auth: `Authorization: Bearer <token>`.
 
 ## Known Edge Cases
 
-- **Duplicate sibling folder names** under the same parent are disambiguated by
-  order; flagged as a known limitation.
+- **Duplicate sibling folder names** under the same parent are supported: each
+  becomes its own Raindrop collection (keeping the real name). Identity uses a
+  disambiguated path component (`Work`, `Work (2)`, …) computed the same way on
+  both sides, so the trees still align. Pairing is by creation order — Chrome
+  siblings sorted by node `id`, Raindrop siblings by collection `_id` — which is
+  stable across display reordering. (`disambiguateNames` in `src/treeModel.js`.)
 - **Very deep nesting** — Raindrop nested collections are supported but deep trees
   may hit practical limits; document if encountered.
 - **Title-only edits are not synced.** Bookmark identity is URL-within-folder, so
