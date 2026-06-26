@@ -55,6 +55,22 @@ test('applyOps groups creates/moves/deletes by collection into single batched ca
   assert.deepEqual(deletes[0], ['deleteRaindrops', 3, [11, 12]]);
 });
 
+test('applyOps gives each created collection the root collection cover', async () => {
+  const covers = [];
+  const api = {
+    async createCollection(title, parentId, cover) { covers.push(cover); return { _id: 200 }; },
+    async createRaindrops() { return []; },
+    async moveRaindrops() {},
+    async deleteRaindrops() {},
+    async deleteCollection() {},
+  };
+  const ops = [
+    { type: 'createCollection', path: ['Chrome', 'Bar'], title: 'Bar', parentPath: ['Chrome'] },
+  ];
+  await applyOps(api, ops, 7, 'Chrome', null, ['https://up.raindrop.io/icon.png']);
+  assert.deepEqual(covers, [['https://up.raindrop.io/icon.png']]);
+});
+
 test('applyOps resolves create into a pre-existing actual folder (not undefined)', async () => {
   const api = recordingApi();
   const actual = {

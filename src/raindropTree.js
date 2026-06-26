@@ -4,9 +4,9 @@ import { emptyFolder, disambiguateNames } from './treeModel.js';
 export async function findOrCreateRoot(api, rootTitle) {
   const roots = await api.getRootCollections();
   const existing = roots.find((c) => c.title === rootTitle);
-  if (existing) return { rootId: existing._id };
+  if (existing) return { rootId: existing._id, cover: existing.cover ?? [] };
   const created = await api.createCollection(rootTitle, null);
-  return { rootId: created._id };
+  return { rootId: created._id, cover: created.cover ?? [] };
 }
 
 export async function buildActualTree(api, rootTitle) {

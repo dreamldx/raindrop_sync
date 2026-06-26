@@ -29,16 +29,18 @@ function fakeApi({ rootCollections = [], childCollections = [], raindropsByCol =
   };
 }
 
-test('findOrCreateRoot returns existing root id', async () => {
-  const api = fakeApi({ rootCollections: [{ _id: 7, title: 'Chrome' }] });
-  assert.deepEqual(await findOrCreateRoot(api, 'Chrome'), { rootId: 7 });
+test('findOrCreateRoot returns existing root id and its cover', async () => {
+  const cover = ['https://up.raindrop.io/collection/icon.png'];
+  const api = fakeApi({ rootCollections: [{ _id: 7, title: 'Chrome', cover }] });
+  assert.deepEqual(await findOrCreateRoot(api, 'Chrome'), { rootId: 7, cover });
 });
 
 test('findOrCreateRoot creates root when missing', async () => {
   const api = fakeApi({ rootCollections: [] });
-  const { rootId } = await findOrCreateRoot(api, 'Chrome');
+  const { rootId, cover } = await findOrCreateRoot(api, 'Chrome');
   assert.equal(api.created[0].title, 'Chrome');
   assert.equal(rootId, 1000);
+  assert.deepEqual(cover, []);
 });
 
 test('buildActualTree nests child collections and raindrops with ids', async () => {

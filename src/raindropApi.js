@@ -90,8 +90,9 @@ export function createRaindropApi({ token, fetchImpl = fetch, now = () => Date.n
       const data = await request('GET', '/collections/childrens');
       return data.items;
     },
-    async createCollection(title, parentId) {
+    async createCollection(title, parentId, cover) {
       const body = parentId ? { title, parent: { $id: parentId } } : { title };
+      if (cover && cover.length) body.cover = cover; // inherit the root collection's icon
       const data = await request('POST', '/collection', body);
       return data.item;
     },

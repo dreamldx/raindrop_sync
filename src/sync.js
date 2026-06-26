@@ -28,12 +28,12 @@ export async function runSync({ token, rootCollection, getChromeTree, apiFactory
 
     const api = apiFactory({ token });
     onProgress('reading-raindrop');
-    const { rootId } = await findOrCreateRoot(api, rootCollection);
+    const { rootId, cover } = await findOrCreateRoot(api, rootCollection);
     const actual = await buildActualTree(api, rootCollection);
 
     onProgress('applying');
     const ops = reconcile(desired, actual);
-    const { counts, idByPath } = await applyOps(api, ops, rootId, rootCollection, actual);
+    const { counts, idByPath } = await applyOps(api, ops, rootId, rootCollection, actual, cover);
     const folderMap = buildFolderMap(desired, idByPath);
 
     onProgress('done');

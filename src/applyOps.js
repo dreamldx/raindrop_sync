@@ -1,6 +1,6 @@
 import { pathKey } from './treeModel.js';
 
-export async function applyOps(api, ops, rootId, rootCollection, actual) {
+export async function applyOps(api, ops, rootId, rootCollection, actual, rootCover) {
   // Seed the path→id map with the configured root so any root name resolves.
   const idByPath = new Map([[pathKey([rootCollection]), rootId]]);
   // Pre-seed with every pre-existing collection from the actual Raindrop tree,
@@ -23,7 +23,7 @@ export async function applyOps(api, ops, rootId, rootCollection, actual) {
   for (const op of ops) {
     if (op.type === 'createCollection') {
       const parentId = idByPath.get(pathKey(op.parentPath));
-      const created = await api.createCollection(op.title, parentId);
+      const created = await api.createCollection(op.title, parentId, rootCover);
       idByPath.set(pathKey(op.path), created._id);
       counts.collectionsCreated += 1;
     } else if (op.type === 'createRaindrop') {

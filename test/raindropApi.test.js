@@ -72,6 +72,14 @@ test('getAllRaindrops fetches the "all" collection (0) in one sweep', async () =
   assert.match(fetchImpl.calls[0].url, /\/raindrops\/0\?/);
 });
 
+test('createCollection includes cover in the body when provided', async () => {
+  const fetchImpl = mockFetch([json({ item: { _id: 9 } })]);
+  const api = createRaindropApi({ token: 'T', fetchImpl, sleep: async () => {} });
+  await api.createCollection('Bar', 7, ['https://up.raindrop.io/icon.png']);
+  const body = JSON.parse(fetchImpl.calls[0].opts.body);
+  assert.deepEqual(body, { title: 'Bar', parent: { $id: 7 }, cover: ['https://up.raindrop.io/icon.png'] });
+});
+
 test('createRaindrops POSTs an items array to /raindrops', async () => {
   const fetchImpl = mockFetch([json({ items: [{ _id: 1 }, { _id: 2 }] })]);
   const api = createRaindropApi({ token: 'T', fetchImpl, sleep: async () => {} });

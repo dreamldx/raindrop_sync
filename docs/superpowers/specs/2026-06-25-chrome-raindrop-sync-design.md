@@ -124,6 +124,13 @@ Manual and periodic both funnel through the same `sync.run()` path.
 5. **Report.** Tally counts, write `lastRun` to storage, **rebuild the folder map**
    (see below), and message the popup.
 
+### Collection icons
+
+Every collection the sync creates inherits the **root collection's `cover`** (its
+icon). `findOrCreateRoot` returns the root's `cover` array and `applyOps` passes it
+to each `createCollection`, so the mirrored tree shares one consistent icon. (Only
+applied at creation time; existing collections keep their covers.)
+
 ### Folder map (`chromeFolderId → collectionId`)
 
 After applying ops, `applyOps` returns its `pathKey → collectionId` map; `sync.js`
