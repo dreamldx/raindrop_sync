@@ -15,7 +15,7 @@ Raindrop **developer test token** (single user, no OAuth).
 
 | Topic | Decision |
 |---|---|
-| Direction | One-way: Chrome → Raindrop |
+| Direction | Forward (automatic/live): Chrome → Raindrop. Plus an on-demand **reverse full-mirror** button: Raindrop → Chrome (writes Chrome bookmarks, mapping Raindrop containers back to Chrome's real Bookmarks Bar / Other / Mobile) |
 | Auth | Raindrop developer **test token** (single user) |
 | Trigger | **Periodic** (`chrome.alarms`) **+ manual** ("Sync now" button) **+ event-driven** (immediate single-op sync on bookmark create/remove) |
 | Folder mapping | **Mirror** Chrome folder tree as Raindrop nested collections |
@@ -40,7 +40,10 @@ RaindropBookmarkSync/
 │   ├── reconcile.js       # PURE diff: desired (Chrome) vs actual (Raindrop) -> ops
 │   ├── applyOps.js        # execute create/move/delete ops via the API
 │   ├── incremental.js     # single-op handlers for bookmark create/remove events
-│   └── sync.js            # orchestrates a run, reports results
+│   ├── sync.js            # orchestrates a forward run, reports results
+│   ├── chromeActual.js    # normalize live Chrome tree → model (for reverse sync)
+│   ├── chromeAdapter.js   # chrome.bookmarks behind the Raindrop-API shape
+│   └── reverseSync.js     # Raindrop → Chrome full mirror (reuses reconcile+applyOps)
 ├── material.css           # shared hand-rolled Material Design 3 styles (no deps)
 ├── options.html / options.js   # token, test connection, root collection, interval
 ├── popup.html / popup.js       # "Sync now", last-run status, live progress
@@ -84,10 +87,13 @@ no-build-step principle.
 
 ## Popup UI (`popup.html` / `popup.js`)
 
-- **Sync now** button — runs `sync.run()` immediately; shows a spinner and is
-  **disabled while *any* sync is running** — manual, alarm, or live-event
-  fallback. The service worker broadcasts `sync-start`/`synced` and answers a
-  `get-state` query, so a popup opened mid-sync starts disabled too.
+- **Sync to Raindrop** button — runs the forward `sync.run()` immediately; shows a
+  spinner and is **disabled while *any* sync is running** — manual, alarm, or
+  live-event fallback. The service worker broadcasts `sync-start`/`synced` and
+  answers a `get-state` query, so a popup opened mid-sync starts disabled too.
+- **Sync from Raindrop** button — runs the **reverse** full-mirror (Raindrop →
+  Chrome) after a `confirm()` warning (it can delete Chrome bookmarks). Both
+  buttons disable together while either direction runs.
 - **Last-run status** — e.g. "Added 12, moved 3, deleted 1 · 2 min ago" / "Failed: invalid token".
 - **Live progress** — staged messages from the service worker: "Reading Chrome
   bookmarks… → Fetching Raindrop collections… → Applying N changes… (or 'Already
@@ -178,6 +184,30 @@ folders unambiguous (the folder id, not the title, picks the collection). If the
 folder isn't in the map yet (a brand-new folder), or a *folder* was removed, the
 handler returns `{ fallback: true }` and the service worker runs a full
 `sync.run()` instead (which creates/deletes the collection and refreshes the map).
+
+## Reverse Sync (Raindrop → Chrome), on demand
+
+A **Sync from Raindrop** button performs a **full mirror** in the other direction:
+make the Chrome bookmark tree match the Raindrop tree under the root collection.
+It reuses the same engine by flipping the roles:
+
+- `chromeActual.js` normalizes the live Chrome tree into the model shape (folders
+  carry `collectionId` = Chrome folder id, bookmarks carry `raindropId` = Chrome
+  bookmark id), with the same id-sort/disambiguation and URL filtering as the
+  forward direction (so non-web bookmarks are left untouched, never deleted).
+- `reconcile(raindropTree, chromeActual)` — Raindrop is **desired**, Chrome is
+  **actual** — yields the op list to bring Chrome in line.
+- `applyOps` drives those ops through `chromeAdapter.js`, which implements the
+  Raindrop-API shape against `chrome.bookmarks`. Two Chrome rules: the rootless
+  root (`'0'`) can't hold children, so folders destined for it go under **Other
+  Bookmarks**; and the root containers (`'0'`/`'1'`/`'2'`/`'3'`) are **never
+  deleted** (their stray bookmarks still are, per full mirror).
+- Afterwards the **folder map is rebuilt** (chromeFolderId → collectionId) from
+  the Raindrop tree + resolved paths, so the forward/live paths recognize the
+  folders just written.
+- While it runs, live forward events are **suppressed** (`suppressEvents`) so the
+  writes don't bounce back as Chrome→Raindrop ops. The popup `confirm()`s first
+  because it can delete Chrome bookmarks.
 
 ## Raindrop API
 

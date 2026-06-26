@@ -6,6 +6,7 @@
     <link rel="stylesheet" href="material.css" />
     <style>
       body { width: 280px; padding: 16px; }
+      #pull { margin-top: 8px; }
       #progress, #last { margin-top: 12px; }
       .md-foot { margin-top: 12px; display: flex; justify-content: flex-end; }
     </style>
@@ -13,7 +14,8 @@
   <body>
     <main class="md-card">
       <h1 class="md-title">Raindrop Sync</h1>
-      <button id="sync" class="md-btn md-btn--block" type="button">Sync now</button>
+      <button id="sync" class="md-btn md-btn--block" type="button" title="Push Chrome bookmarks to Raindrop">Sync to Raindrop</button>
+      <button id="pull" class="md-btn md-btn--tonal md-btn--block" type="button" title="Pull Raindrop collections into Chrome (full mirror)">Sync from Raindrop</button>
       <div id="progress" class="md-status"></div>
       <div id="last" class="md-status"></div>
       <div class="md-foot">

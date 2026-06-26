@@ -3,6 +3,9 @@ import { createStorage } from './src/storage.js';
 import { runSync } from './src/sync.js';
 import { createRaindropApi } from './src/raindropApi.js';
 import { applyBookmarkCreated, applyBookmarkRemoved } from './src/incremental.js';
+import { findOrCreateRoot, buildActualTree } from './src/raindropTree.js';
+import { reverseSync } from './src/reverseSync.js';
+import { createChromeAdapter } from './src/chromeAdapter.js';
 
 const storage = createStorage();
 const ALARM = 'sync';
@@ -18,6 +21,9 @@ function enqueue(task) {
 }
 
 let importing = false;
+// Suppress live forward events while the reverse sync is writing to Chrome, so
+// its writes don't bounce back as Chrome→Raindrop ops.
+let suppressEvents = false;
 
 const getChromeTree = () => chrome.bookmarks.getTree();
 
@@ -60,6 +66,42 @@ async function runAndRecord() {
   }
 }
 
+// Full-mirror Raindrop → Chrome (the reverse direction). Writes to Chrome
+// bookmarks with live forward events suppressed, then refreshes the folder map.
+async function runReverseAndRecord() {
+  running = true;
+  suppressEvents = true;
+  broadcast({ type: 'sync-start' });
+  try {
+    const { token, rootCollection } = await storage.getSettings();
+    if (!token) {
+      await storage.setLastRun({ ok: false, message: 'No Raindrop token set. Add one in Settings.', at: Date.now() });
+      return;
+    }
+    const api = createRaindropApi({ token });
+    broadcast({ type: 'progress', stage: 'reading-raindrop' });
+    await findOrCreateRoot(api, rootCollection);
+    const raindropTree = await buildActualTree(api, rootCollection);
+
+    broadcast({ type: 'progress', stage: 'reading-chrome' });
+    const chromeRoots = await chrome.bookmarks.getTree();
+
+    broadcast({ type: 'progress', stage: 'mirroring' });
+    const adapter = createChromeAdapter(chrome.bookmarks);
+    const { counts, folderMap } = await reverseSync(raindropTree, chromeRoots, adapter, rootCollection);
+
+    await storage.setFolderMap(folderMap);
+    const message = `Pulled from Raindrop: added ${counts.added}, deleted ${counts.deleted}.`;
+    await storage.setLastRun({ ok: true, message, counts, at: Date.now() });
+  } catch (err) {
+    await storage.setLastRun({ ok: false, message: `Pull failed: ${err.message}`, at: Date.now() });
+  } finally {
+    running = false;
+    suppressEvents = false;
+    broadcast({ type: 'synced' });
+  }
+}
+
 async function handleIncremental(kind, payload) {
   const { token, rootCollection } = await storage.getSettings();
   if (!token) return; // periodic full sync will catch up once a token is set
@@ -90,11 +132,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // Event-driven incremental sync (suppressed during bulk import).
 chrome.bookmarks.onCreated.addListener((_id, node) => {
-  if (importing) return;
+  if (importing || suppressEvents) return;
   enqueue(() => handleIncremental('created', node));
 });
 chrome.bookmarks.onRemoved.addListener((_id, removeInfo) => {
-  if (importing) return;
+  if (importing || suppressEvents) return;
   enqueue(() => handleIncremental('removed', removeInfo));
 });
 chrome.bookmarks.onImportBegan.addListener(() => { importing = true; });
@@ -104,6 +146,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'sync-now') {
     enqueue(runAndRecord).then(sendResponse, (err) => sendResponse({ ok: false, counts: null, message: err.message }));
     return true; // async response
+  }
+  if (msg.type === 'reverse-sync') {
+    enqueue(runReverseAndRecord).then(sendResponse, (err) => sendResponse({ ok: false, message: err.message }));
+    return true;
   }
   if (msg.type === 'reschedule') {
     scheduleAlarm().then(() => sendResponse({ ok: true }), (err) => sendResponse({ ok: false, message: err.message }));
