@@ -3,12 +3,6 @@ import { createStorage } from './src/storage.js';
 
 const storage = createStorage();
 const $ = (id) => document.getElementById(id);
-const STAGE_TEXT = {
-  'reading-chrome': 'Reading bookmarks…',
-  'reading-raindrop': 'Fetching Raindrop…',
-  'applying': 'Applying changes…',
-  'done': 'Done.',
-};
 
 let syncing = false;
 
@@ -21,6 +15,28 @@ function timeAgo(at) {
   if (!at) return '';
   const mins = Math.round((Date.now() - at) / 60000);
   return mins <= 0 ? 'just now' : `${mins} min ago`;
+}
+
+function stageText(stage, detail) {
+  switch (stage) {
+    case 'reading-chrome': return 'Reading Chrome bookmarks…';
+    case 'reading-raindrop': return 'Fetching Raindrop collections…';
+    case 'applying': {
+      const n = detail?.changes ?? 0;
+      if (n === 0) return 'Already up to date…';
+      return `Applying ${n} change${n === 1 ? '' : 's'}…`;
+    }
+    case 'done': return 'Finishing up…';
+    default: return String(stage);
+  }
+}
+
+// Put the popup into the "syncing" visual state (spinner + disabled button).
+function enterSyncingUI(text = 'Starting…') {
+  syncing = true;
+  $('sync').disabled = true;
+  $('sync').innerHTML = '<span class="md-spinner"></span> Syncing…';
+  setStatus($('progress'), text);
 }
 
 // Render the last-run line and the Sync button's enabled state from storage.
@@ -43,19 +59,20 @@ async function finishSync() {
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === 'progress') {
-    $('progress').textContent = STAGE_TEXT[msg.stage] ?? msg.stage;
+  if (msg.type === 'sync-start') {
+    // A sync began (manual, alarm, or live-event fallback) — reflect it.
+    if (!syncing) enterSyncingUI();
+  } else if (msg.type === 'progress') {
+    if (!syncing) enterSyncingUI();
+    setStatus($('progress'), stageText(msg.stage, msg.detail));
   } else if (msg.type === 'synced') {
-    // Service worker finished a run and wrote the result to storage.
     if (syncing) finishSync(); else showLast();
   }
 });
 
 $('sync').addEventListener('click', async () => {
   if (syncing || $('sync').disabled) return;
-  syncing = true;
-  $('sync').disabled = true;
-  $('sync').innerHTML = '<span class="md-spinner"></span> Syncing…';
+  enterSyncingUI();
   try {
     // Best-effort: a full sync can outlive the popup (it closes on blur) or the
     // service worker, which closes the channel. We don't depend on this response —
@@ -70,4 +87,15 @@ $('sync').addEventListener('click', async () => {
 
 $('settings').addEventListener('click', () => chrome.runtime.openOptionsPage());
 
-showLast();
+// On open, learn whether a sync is already running so the button starts disabled.
+async function init() {
+  try {
+    const state = await chrome.runtime.sendMessage({ type: 'get-state' });
+    if (state?.running) { enterSyncingUI('Syncing…'); return; }
+  } catch {
+    // service worker asleep / no response — fall through to stored state
+  }
+  await showLast();
+}
+
+init();

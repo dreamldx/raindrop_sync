@@ -29,22 +29,35 @@ async function scheduleAlarm() {
   }
 }
 
+// True while any full sync is executing, so a popup (even one opened mid-sync)
+// can disable its button. Queried via the 'get-state' message.
+let running = false;
+
+function broadcast(message) {
+  chrome.runtime.sendMessage(message).catch(() => {});
+}
+
 async function runAndRecord() {
-  const { token, rootCollection } = await storage.getSettings();
-  const res = await runSync({
-    token,
-    rootCollection,
-    getChromeTree,
-    onProgress: (stage) => { chrome.runtime.sendMessage({ type: 'progress', stage }).catch(() => {}); },
-  });
-  await storage.setLastRun({ ok: res.ok, message: res.message, counts: res.counts, at: Date.now() });
-  // Persist the rebuilt chromeFolderId → collectionId map for the live single-ops.
-  if (res.folderMap) await storage.setFolderMap(res.folderMap);
-  // Notify any open popup that the final result is now in storage. This survives a
-  // closed message channel (the popup is destroyed whenever it loses focus), so the
-  // popup can reflect completion without depending on the sync-now response.
-  chrome.runtime.sendMessage({ type: 'synced' }).catch(() => {});
-  return res;
+  running = true;
+  broadcast({ type: 'sync-start' });
+  try {
+    const { token, rootCollection } = await storage.getSettings();
+    const res = await runSync({
+      token,
+      rootCollection,
+      getChromeTree,
+      onProgress: (stage, detail) => broadcast({ type: 'progress', stage, detail }),
+    });
+    await storage.setLastRun({ ok: res.ok, message: res.message, counts: res.counts, at: Date.now() });
+    // Persist the rebuilt chromeFolderId → collectionId map for the live single-ops.
+    if (res.folderMap) await storage.setFolderMap(res.folderMap);
+    return res;
+  } finally {
+    running = false;
+    // Notify any open popup that the run finished and the result is in storage.
+    // This survives a closed message channel (the popup is destroyed on blur).
+    broadcast({ type: 'synced' });
+  }
 }
 
 async function handleIncremental(kind, payload) {
@@ -95,5 +108,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'reschedule') {
     scheduleAlarm().then(() => sendResponse({ ok: true }), (err) => sendResponse({ ok: false, message: err.message }));
     return true;
+  }
+  if (msg.type === 'get-state') {
+    // Lets a freshly-opened popup learn a sync is already running.
+    sendResponse({ running });
+    return false;
   }
 });

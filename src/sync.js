@@ -31,8 +31,8 @@ export async function runSync({ token, rootCollection, getChromeTree, apiFactory
     const { rootId, cover } = await findOrCreateRoot(api, rootCollection);
     const actual = await buildActualTree(api, rootCollection);
 
-    onProgress('applying');
     const ops = reconcile(desired, actual);
+    onProgress('applying', { changes: ops.length });
     const { counts, idByPath } = await applyOps(api, ops, rootId, rootCollection, actual, cover);
     const folderMap = buildFolderMap(desired, idByPath);
 

@@ -84,9 +84,14 @@ no-build-step principle.
 
 ## Popup UI (`popup.html` / `popup.js`)
 
-- **Sync now** button — runs `sync.run()` immediately; disabled with spinner while running.
-- **Last-run status** — e.g. "Synced 12 added, 3 deleted · 2 min ago" / "Failed: invalid token".
-- **Live progress** — messages from the service worker: "Reading bookmarks… / Fetching Raindrop… / Applying 15 changes…".
+- **Sync now** button — runs `sync.run()` immediately; shows a spinner and is
+  **disabled while *any* sync is running** — manual, alarm, or live-event
+  fallback. The service worker broadcasts `sync-start`/`synced` and answers a
+  `get-state` query, so a popup opened mid-sync starts disabled too.
+- **Last-run status** — e.g. "Added 12, moved 3, deleted 1 · 2 min ago" / "Failed: invalid token".
+- **Live progress** — staged messages from the service worker: "Reading Chrome
+  bookmarks… → Fetching Raindrop collections… → Applying N changes… (or 'Already
+  up to date…') → Finishing up…".
 - **Settings** link → opens `options.html`.
 
 Manual and periodic both funnel through the same `sync.run()` path.
