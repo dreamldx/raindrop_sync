@@ -1,6 +1,6 @@
 {
   "name": "raindrop-bookmark-sync",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "description": "Mirror Chrome bookmarks into raindrop.io",
   "type": "module",
   "private": true,
