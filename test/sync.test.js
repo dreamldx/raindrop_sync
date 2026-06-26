@@ -15,9 +15,9 @@ function apiFactory() {
     async getChildCollections() { return state.children; },
     async getAllRaindrops() { return Object.entries(state.raindrops).flatMap(([cid, items]) => items.map((r) => ({ ...r, collectionId: Number(cid) }))); },
     async createCollection(t, p) { const item = { _id: 50 + state.created.length, title: t }; state.created.push(item); return item; },
-    async createRaindrop(a) { state.created.push(a); return { _id: 999 }; },
-    async moveRaindrop() {},
-    async deleteRaindrop() {},
+    async createRaindrops(items) { for (const it of items) state.created.push(it); return items.map(() => ({ _id: 999 })); },
+    async moveRaindrops() {},
+    async deleteRaindrops() {},
     async deleteCollection() {},
   };
 }
@@ -62,13 +62,19 @@ function statefulRaindrop() {
       if (i >= 0) collections.splice(i, 1);
       for (let k = raindrops.length - 1; k >= 0; k--) if (raindrops[k].collectionId === id) raindrops.splice(k, 1);
     },
-    async createRaindrop({ link, title, collectionId }) {
-      const r = { _id: nextRd++, link, title, collectionId };
-      raindrops.push(r);
-      return r;
+    async createRaindrops(items) {
+      return items.map((it) => {
+        const r = { _id: nextRd++, link: it.link, title: it.title, collectionId: it.collection.$id };
+        raindrops.push(r);
+        return r;
+      });
     },
-    async moveRaindrop(id, collectionId) { const r = raindrops.find((x) => x._id === id); if (r) r.collectionId = collectionId; },
-    async deleteRaindrop(id) { const i = raindrops.findIndex((x) => x._id === id); if (i >= 0) raindrops.splice(i, 1); },
+    async moveRaindrops(from, ids, to) {
+      for (const id of ids) { const r = raindrops.find((x) => x._id === id); if (r) r.collectionId = to; }
+    },
+    async deleteRaindrops(collectionId, ids) {
+      for (const id of ids) { const i = raindrops.findIndex((x) => x._id === id); if (i >= 0) raindrops.splice(i, 1); }
+    },
     _state: { collections, raindrops },
   });
 }

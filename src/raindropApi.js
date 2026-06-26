@@ -127,5 +127,19 @@ export function createRaindropApi({ token, fetchImpl = fetch, now = () => Date.n
     async deleteRaindrop(id) {
       await request('DELETE', `/raindrop/${id}`);
     },
+    // --- Batch writes (fewer requests; each items array is capped at 100) ---
+    // Create many raindrops in one call; each item carries its own collection.
+    async createRaindrops(items) {
+      const data = await request('POST', '/raindrops', { items });
+      return data.items ?? [];
+    },
+    // Move many raindrops out of `fromCollectionId` into `toCollectionId`.
+    async moveRaindrops(fromCollectionId, ids, toCollectionId) {
+      await request('PUT', `/raindrops/${fromCollectionId}`, { ids, collection: { $id: toCollectionId } });
+    },
+    // Delete many raindrops that live in `collectionId`.
+    async deleteRaindrops(collectionId, ids) {
+      await request('DELETE', `/raindrops/${collectionId}`, { ids });
+    },
   };
 }

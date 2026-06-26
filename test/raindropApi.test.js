@@ -71,3 +71,32 @@ test('getAllRaindrops fetches the "all" collection (0) in one sweep', async () =
   assert.equal(items[0].collectionId, 8);
   assert.match(fetchImpl.calls[0].url, /\/raindrops\/0\?/);
 });
+
+test('createRaindrops POSTs an items array to /raindrops', async () => {
+  const fetchImpl = mockFetch([json({ items: [{ _id: 1 }, { _id: 2 }] })]);
+  const api = createRaindropApi({ token: 'T', fetchImpl, sleep: async () => {} });
+  const items = [{ link: 'a', title: 'A', collection: { $id: 5 } }, { link: 'b', title: 'B', collection: { $id: 5 } }];
+  const out = await api.createRaindrops(items);
+  assert.equal(out.length, 2);
+  assert.match(fetchImpl.calls[0].url, /\/raindrops$/);
+  assert.equal(fetchImpl.calls[0].opts.method, 'POST');
+  assert.deepEqual(JSON.parse(fetchImpl.calls[0].opts.body).items, items);
+});
+
+test('moveRaindrops PUTs ids + target collection to the source collection', async () => {
+  const fetchImpl = mockFetch([json({ result: true })]);
+  const api = createRaindropApi({ token: 'T', fetchImpl, sleep: async () => {} });
+  await api.moveRaindrops(3, [9, 10], 7);
+  assert.match(fetchImpl.calls[0].url, /\/raindrops\/3$/);
+  assert.equal(fetchImpl.calls[0].opts.method, 'PUT');
+  assert.deepEqual(JSON.parse(fetchImpl.calls[0].opts.body), { ids: [9, 10], collection: { $id: 7 } });
+});
+
+test('deleteRaindrops DELETEs ids from the source collection', async () => {
+  const fetchImpl = mockFetch([json({ result: true })]);
+  const api = createRaindropApi({ token: 'T', fetchImpl, sleep: async () => {} });
+  await api.deleteRaindrops(3, [11, 12]);
+  assert.match(fetchImpl.calls[0].url, /\/raindrops\/3$/);
+  assert.equal(fetchImpl.calls[0].opts.method, 'DELETE');
+  assert.deepEqual(JSON.parse(fetchImpl.calls[0].opts.body), { ids: [11, 12] });
+});

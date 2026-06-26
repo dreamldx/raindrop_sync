@@ -79,6 +79,7 @@ export function reconcile(desired, actual) {
       moveRaindrop.push({
         type: 'moveRaindrop',
         raindropId: elsewhere.raindropId,
+        fromCollectionId: A.folders.get(elsewhere.folderKey).collectionId,
         toCollectionPath: desiredFolder.path,
       });
     } else {
@@ -93,10 +94,14 @@ export function reconcile(desired, actual) {
 
   // Actual bookmarks not wanted anywhere → delete (skip ones being moved).
   const movedIds = new Set(moveRaindrop.map((m) => m.raindropId));
-  for (const { node } of A.byUrl.values()) {
+  for (const { folderKey, node } of A.byUrl.values()) {
     const wantedSomewhere = desiredUrls.has(node.url);
     if (!wantedSomewhere && !movedIds.has(node.raindropId)) {
-      deleteRaindrop.push({ type: 'deleteRaindrop', raindropId: node.raindropId });
+      deleteRaindrop.push({
+        type: 'deleteRaindrop',
+        raindropId: node.raindropId,
+        collectionId: A.folders.get(folderKey).collectionId,
+      });
     }
   }
 

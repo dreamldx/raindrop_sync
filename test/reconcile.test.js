@@ -22,7 +22,7 @@ test('bookmark only in actual → deleteRaindrop', () => {
   const desired = root();
   const actual = root([], [{ url: 'https://a.com', title: 'A', raindropId: 9 }], { collectionId: 1 });
   assert.deepEqual(reconcile(desired, actual), [
-    { type: 'deleteRaindrop', raindropId: 9 },
+    { type: 'deleteRaindrop', raindropId: 9, collectionId: 1 },
   ]);
 });
 
@@ -64,7 +64,7 @@ test('same url in different folder → moveRaindrop', () => {
   // 'B' is created before the move targets it; old folder 'A' is deleted last.
   assert.deepEqual(ops, [
     { type: 'createCollection', path: ['Chrome', 'B'], title: 'B', parentPath: ['Chrome'] },
-    { type: 'moveRaindrop', raindropId: 9, toCollectionPath: ['Chrome', 'B'] },
+    { type: 'moveRaindrop', raindropId: 9, fromCollectionId: 2, toCollectionPath: ['Chrome', 'B'] },
     { type: 'deleteCollection', path: ['Chrome', 'A'], collectionId: 2 },
   ]);
 });
@@ -101,8 +101,8 @@ test('move and delete in same call → moveRaindrop precedes deleteRaindrop', ()
   const moveIdx = ops.findIndex((o) => o.type === 'moveRaindrop' && o.raindropId === 9);
   const delIdx = ops.findIndex((o) => o.type === 'deleteRaindrop' && o.raindropId === 8);
   assert.ok(moveIdx > -1 && delIdx > -1, 'both move and delete present');
-  assert.deepEqual(ops[moveIdx], { type: 'moveRaindrop', raindropId: 9, toCollectionPath: ['Chrome', 'B'] });
-  assert.deepEqual(ops[delIdx], { type: 'deleteRaindrop', raindropId: 8 });
+  assert.deepEqual(ops[moveIdx], { type: 'moveRaindrop', raindropId: 9, fromCollectionId: 2, toCollectionPath: ['Chrome', 'B'] });
+  assert.deepEqual(ops[delIdx], { type: 'deleteRaindrop', raindropId: 8, collectionId: 1 });
   assert.ok(moveIdx < delIdx, 'moveRaindrop precedes deleteRaindrop');
   // Folder 'A' is emptied by the move and should be deleted after the deleteRaindrop.
   const delCollIdx = ops.findIndex((o) => o.type === 'deleteCollection' && o.collectionId === 2);

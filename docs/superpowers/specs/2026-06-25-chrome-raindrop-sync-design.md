@@ -116,7 +116,11 @@ Manual and periodic both funnel through the same `sync.run()` path.
    - `deleteRaindrop(id)` — raindrop under root with no matching Chrome bookmark.
 4. **Apply (`applyOps.js`).** Safe order: create collections → create/move
    raindrops → delete raindrops → delete empty collections. (Deletes last so a
-   move never transiently loses data.)
+   move never transiently loses data.) Collections are created sequentially
+   (parent before child); raindrop ops are **batched** to cut request count:
+   creates via `POST /raindrops` (chunks of 100), moves grouped by source→target
+   collection via `PUT /raindrops/{source}`, deletes grouped by source collection
+   via `DELETE /raindrops/{source}`.
 5. **Report.** Tally counts, write `lastRun` to storage, **rebuild the folder map**
    (see below), and message the popup.
 
@@ -175,10 +179,11 @@ Base: `https://api.raindrop.io/rest/v1`. Auth: `Authorization: Bearer <token>`.
 | Delete collection | `DELETE /collection/{id}` |
 | List raindrops in a collection | `GET /raindrops/{collectionId}` (paged, `perpage=50`, `page`) — used by incremental single-op lookups |
 | List ALL raindrops (batch) | `GET /raindrops/0` (the "all" meta-collection, paged) — full sync fetches every raindrop in one sweep and buckets by `collectionId`, so request count is independent of collection count |
-| Create raindrop | `POST /raindrop` (`{ link, title, collection: { $id } }`) |
-| Move raindrop | `PUT /raindrop/{id}` (`{ collection: { $id } }`) |
-| Delete raindrop | `DELETE /raindrop/{id}` |
-| Batch create | `POST /raindrops` (array) where helpful |
+| Create raindrop (single) | `POST /raindrop` (`{ link, title, collection: { $id } }`) — used by live add |
+| Delete raindrop (single) | `DELETE /raindrop/{id}` — used by live remove |
+| **Batch create** | `POST /raindrops` (`{ items: [...] }`, ≤100) — full sync |
+| **Batch move** | `PUT /raindrops/{sourceCollectionId}` (`{ ids, collection: { $id } }`) — full sync |
+| **Batch delete** | `DELETE /raindrops/{sourceCollectionId}` (`{ ids }`) — full sync |
 
 ### Rate limiting & retry
 - `raindropApi.js` applies **two** client-side controls before every request:
